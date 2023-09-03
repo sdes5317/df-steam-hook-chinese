@@ -4,6 +4,7 @@
 #include "screen_manager.hpp"
 #include "state_manager.hpp"
 #include "ttf_manager.h"
+#include "utils.hpp"
 
 namespace Hooks {
 
