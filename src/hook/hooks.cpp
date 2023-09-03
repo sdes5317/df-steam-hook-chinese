@@ -3,7 +3,7 @@
 #include "dictionary.h"
 #include "screen_manager.hpp"
 #include "state_manager.hpp"
-// #include "ttf_manager.h"
+#include "ttf_manager.h"
 
 namespace Hooks {
 
@@ -19,12 +19,12 @@ namespace Hooks {
   LRUCache<std::string, long> texture_id_cache(500);
 
   // setup texture to texture vector and recieve tex_pos
-  // SETUP_ORIG_FUNC(add_texture);
-  // long __fastcall HOOK(add_texture)(void* ptr, SDL_Surface* texture)
-  // {
-  //   g_textures_ptr = ptr;
-  //   return ORIGINAL(add_texture)(ptr, texture);
-  // }
+  SETUP_ORIG_FUNC(add_texture);
+  long __fastcall HOOK(add_texture)(void* ptr, SDL_Surface* texture)
+  {
+    g_textures_ptr = ptr;
+    return ORIGINAL(add_texture)(ptr, texture);
+  }
 
   template <typename T, typename... Args>
   void LockedCall(std::atomic<bool>& flag, T& func, Args&&... args) {
@@ -42,13 +42,13 @@ namespace Hooks {
 
     if (symbol > 0) {
       std::string str(1, symbol);
-      // auto texture = TTFManager::GetSingleton()->CreateTexture(str);
+      auto texture = TTFManager::GetSingleton()->CreateTexture(str);
       auto cached_texture_id = texture_id_cache.Get(str);
       long tex_pos = 0;
       if (cached_texture_id) {
         tex_pos = cached_texture_id.value().get();
       } else {
-        // tex_pos = ORIGINAL(add_texture)(g_textures_ptr, texture);
+        tex_pos = ORIGINAL(add_texture)(g_textures_ptr, texture);
         texture_id_cache.Put(str, tex_pos);
       }
       tile->tex_pos = tex_pos;
@@ -62,7 +62,7 @@ namespace Hooks {
   void __fastcall HOOK(addchar)(graphicst_* gps, wchar_t symbol, char advance) {
     g_graphics_ptr = gps;
     if (ScreenManager::GetSingleton()->isInitialized() && g_textures_ptr != nullptr) {
-      // InjectTTFChar<ScreenManager::ScreenType::Main>(symbol, gps->screenx, gps->screeny);
+      InjectTTFChar<ScreenManager::ScreenType::Main>(symbol, gps->screenx, gps->screeny);
     }
     ORIGINAL(addchar)(gps, symbol, advance);
   }
@@ -71,7 +71,7 @@ namespace Hooks {
   SETUP_ORIG_FUNC(addchar_top);
   void __fastcall HOOK(addchar_top)(graphicst_* gps, wchar_t symbol, char advance) {
     if (ScreenManager::GetSingleton()->isInitialized() && g_textures_ptr != nullptr) {
-      // InjectTTFChar<ScreenManager::ScreenType::Top>(symbol, gps->screenx, gps->screeny);
+      InjectTTFChar<ScreenManager::ScreenType::Top>(symbol, gps->screenx, gps->screeny);
     }
     ORIGINAL(addchar_top)(gps, symbol, advance);
   }
@@ -122,26 +122,26 @@ namespace Hooks {
 
   // main strings handling
   // ttf swap option
-  // SETUP_ORIG_FUNC(addst, 0x784C60);
-  // void __fastcall HOOK(addst)(graphicst_* gps, std::string& str, justification_ justify, int space)
-  // {
-  //   // translation test segment
-  //   // logger::debug("addst text {} len {} capa {}", text, str->len, str->capa);
+  SETUP_ORIG_FUNC(addst, 0x784C60);
+  void __fastcall HOOK(addst)(graphicst_* gps, std::string& str, justification_ justify, int space)
+  {
+    // translation test segment
+    // logger::debug("addst text {} len {} capa {}", text, str->len, str->capa);
 
-  //   auto translation = Dictionary::GetSingleton()->Get(str);
-  //   if (translation) {
-  //     auto tstr = translation.value();
-  //     auto wstr = s2ws(translation.value());
-  //     for (int i = 0; i < wstr.size(); i++) {
-  //       InjectTTFChar<ScreenManager::ScreenType::Main>(wstr[i], gps->screenx + i, gps->screeny);
-  //     }
-  //     tstr.resize(wstr.size());
-  //     LockedCall(ttf_injection_lock, ORIGINAL(addst), gps, tstr, justify, space);
-  //     return;
-  //   }
+    auto translation = Dictionary::GetSingleton()->Get(str);
+    if (translation) {
+      auto tstr = translation.value();
+      auto wstr = s2ws(translation.value());
+      for (int i = 0; i < wstr.size(); i++) {
+        InjectTTFChar<ScreenManager::ScreenType::Main>(wstr[i], gps->screenx + i, gps->screeny);
+      }
+      tstr.resize(wstr.size());
+      LockedCall(ttf_injection_lock, ORIGINAL(addst), gps, tstr, justify, space);
+      return;
+    }
 
-  //   ORIGINAL(addst)(gps, str, justify, space);
-  // }
+    ORIGINAL(addst)(gps, str, justify, space);
+  }
 
   // strcpy
   SETUP_ORIG_FUNC(string_copy);
@@ -629,14 +629,14 @@ namespace Hooks {
   // should call init() for TTFInit and SDL function load from dll
   // then should load font for drawing text
   void InstallTTFInjection() {
-    // auto ttf = TTFManager::GetSingleton();
-    // ttf->Init();
-    // ttf->LoadFont("terminus_bold.ttf", 14, 2);
+    auto ttf = TTFManager::GetSingleton();
+    ttf->Init();
+    ttf->LoadFont("..\\..\\config\\fontedit.ttf", 14, 4);
 
     // ttf inject, we swap get every char and swap it to our texture
     ATTACH(addchar);
     ATTACH(addchar_top);
-    // ATTACH(add_texture);
+    ATTACH(add_texture);
     ATTACH(screen_to_texid);
     ATTACH(screen_to_texid_top);
     ATTACH(gps_allocate);
@@ -646,7 +646,7 @@ namespace Hooks {
   void UninstallTTFInjection() {
     DETACH(addchar);
     DETACH(addchar_top);
-    // DETACH(add_texture);
+    DETACH(add_texture);
     DETACH(screen_to_texid);
     DETACH(screen_to_texid_top);
     DETACH(gps_allocate);
@@ -659,12 +659,12 @@ namespace Hooks {
     auto state = StateManager::GetSingleton();
     state->SetCallback(StateManager::Menu, [&](void) { logger::debug("game state changed to StateManager::Menu"); });
     state->SetCallback(StateManager::Loading, [&](void) {
-      // TTFManager::GetSingleton()->ClearCache();
+      TTFManager::GetSingleton()->ClearCache();
       texture_id_cache.Clear();
       logger::debug("game state changed to StateManager::Loading, clearing texture cache");
     });
     state->SetCallback(StateManager::Game, [&](void) {
-      // TTFManager::GetSingleton()->ClearCache();
+      TTFManager::GetSingleton()->ClearCache();
       texture_id_cache.Clear();
       logger::debug("game state changed to StateManager::Game, clearing texture cache");
     });
@@ -686,10 +686,10 @@ namespace Hooks {
   // translation
   void InstallTranslation() {
 
-    // ATTACH(string_copy);
+    ATTACH(string_copy);
     ATTACH(string_copy_n);
-    // ATTACH(string_append);
-    // ATTACH(string_append_0);
+    ATTACH(string_append);
+    ATTACH(string_append_0);
     ATTACH(string_append_n);
     ATTACH(convert_ulong_to_string);
     ATTACH(addst);
@@ -700,10 +700,10 @@ namespace Hooks {
 
   void UninstallTranslation() {
     // translation
-    // DETACH(string_copy);
+    DETACH(string_copy);
     DETACH(string_copy_n);
-    // DETACH(string_append);
-    // DETACH(string_append_0);
+    DETACH(string_append);
+    DETACH(string_append_0);
     DETACH(string_append_n);
     DETACH(convert_ulong_to_string);
     DETACH(addst);

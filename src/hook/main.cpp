@@ -34,8 +34,8 @@ BOOL ProcessAttach() {
   if (Config::Setting::enable_search) {
     Hooks::InstallTextEntry();
   }
-  // Hooks::InstallTTFInjection();
-  // Hooks::InstallStateManager();
+  Hooks::InstallTTFInjection();
+  Hooks::InstallStateManager();
 
   if (Config::Setting::enable_patches) {
     Patches::Install();
@@ -56,8 +56,8 @@ BOOL ProcessDetach() {
   if (Config::Setting::enable_search) {
     Hooks::UninstallTextEntry();
   }
-  // Hooks::UninstallTTFInjection();
-  // Hooks::UninstallStateManager();
+  Hooks::UninstallTTFInjection();
+  Hooks::UninstallStateManager();
   logger::info("hooks uninstalled");
   DetourTransactionCommit();
 
