@@ -51,8 +51,8 @@
 #include <Windows.h>
 #pragma comment(lib, "User32.lib")
 
-// #include "SDL/SDL_ttf.h"
-// #pragma comment(lib, "SDL_ttf.lib")
+#include "SDL/SDL_ttf.h"
+#pragma comment(lib, "SDL_ttf.lib")
 
 #include <detours/detours.h>
 #include <spdlog/sinks/basic_file_sink.h>
